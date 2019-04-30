@@ -193,17 +193,17 @@ class Cable extends Element {
 		
 		// Combined characteristics
 		real cable_ampacities[][] = {cable_ampacities_400;cable_ampacities_680;cable_ampacities_800};
-		cable_resistivities = [cable_resistivities_400;cable_resistivities_680;cable_resistivities_800];
+		real cable_resistivities[][] = [cable_resistivities_400;cable_resistivities_680;cable_resistivities_800];
 		
 		// Perform error check on input data
-		if frequency ~= 400
+		if (frequency ~= 400) {
 			if frequency ~= 680
 				if frequency ~= 800
 					msg = 'Incompatible frequency';
 					error(msg)
 				end
 			end
-		end
+		}
 		
 		// Determine number of lines
 		if n_phases == 1
