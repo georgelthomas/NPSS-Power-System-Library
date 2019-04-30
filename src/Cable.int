@@ -197,12 +197,12 @@ class Cable extends Element {
 		
 		// Perform error check on input data
 		if (frequency ~= 400) {
-			if frequency ~= 680
+			if (frequency ~= 680) {
 				if frequency ~= 800
 					msg = 'Incompatible frequency';
 					error(msg)
 				end
-			end
+			}
 		}
 		
 		// Determine number of lines
