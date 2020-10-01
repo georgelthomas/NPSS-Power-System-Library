@@ -161,6 +161,7 @@ current information is updated in the breaker's input and output ports.";
   ComplexNumber Z;
   ComplexNumber I;
   ComplexNumber S;
+  ComplexNumber dS;
 
   //------------------------------------
   // ****** OPTION VARIABLE SETUP ******
@@ -279,11 +280,16 @@ current information is updated in the breaker's input and output ports.";
       // do the component performance/design calculations.
       if ((EP_I.ElectricPowerType == "DC") && (EP_O.ElectricPowerType == "DC")) {
 
+        // For DC, it is assumed separate 2 breaker units are included,
+        // one on the positive and one on the negative conductor.
+        // This means the efficiency must be counted twice (squared)
+        // and the mass must be counted twice (multiplied by 2)
+
         // calculate this component load power
-        real dc_efficiency = effDes;
+        real dc_efficiency = effDes**2;
         S.setrj(EP_I.S.r * dc_efficiency,  0.);
         
-        // calculate mass
+        // calculate mass 
         Mass = 2.*EP_I.S.mag / SpecificPower;
         
         // calculate this component load side voltage
@@ -296,7 +302,7 @@ current information is updated in the breaker's input and output ports.";
         // calculate this component impedance
         R = (dV.r) / (EP_I.I.r);
         L = 0;
-        Z.setrj(R,  L * (2*PI*EP_I.frequency));
+        Z.setrj(R,  0);
 
       } else if (((EP_I.ElectricPowerType == "AC")  && (EP_O.ElectricPowerType == "AC")) || 
             ((EP_I.ElectricPowerType == "AC3") && (EP_O.ElectricPowerType == "AC3"))) {
@@ -304,40 +310,33 @@ current information is updated in the breaker's input and output ports.";
         // calculate this component load power
         S.setrj(EP_I.S.r * effDes,  EP_I.S.j * effDes);
         
-        // calculate this component mass
-        Mass = EP_I.S.mag / SpecificPower;
+        // calculate impedance needed to produce losses that result in design efficiency
+        // for AC:  Z =  (dS*1000)  / abs(I)^2
+        // for AC3: Z = (dS/3*1000) / abs(I)^2
+
+        // Start by calculating losses
+        dS.copy("EP_I.S"); // Start with input power, then subtract calculated output power
+        dS.minus("S");     // dS now contains losses (for AC and AC3, these are TOTAL losses)
+
+        if (EP_I.ElectricPowerType == "AC3") {
+          dS.scale(1./3.); // convert 3-phase total losses to per-phase losses
+        }                  // if instead we're running AC, then per-phase losses ARE total losses
         
-        // start calculating the denominator of the voltage drop (V = S/I*)
-        I.copy("EP_I.I");
+        // From losses in kW, calculate impedance... 
+        Z.copy("dS");
+        Z.scale(1000.); // convert from kW to W
+        Z.scale(I.mag**2);  // divide by I * conj(I), same as abs(I)^2
+        
+        // calculate voltage drop (VLN) = dV = dS_per_phase / conj(I).
+        dV.copy("dS");
         I.conjugate();
-        if (EP_I.ElectricPowerType == "AC") {
-        }
-        else if (EP_I.ElectricPowerType == "AC3") {
-          I.scale(3.);
-        }
+        dV.div("I");
         
-        // calculate this component load side voltage
-        V.copy("S");
-        V.scale(1000.);
-        V.div("I"); // after this calculation, V will store the line-to-neutral voltage at the output of the breaker
-        
-        // get calculated voltage drop based on design efficiency (grab input side voltage and subtract off the calculated output voltage).
-        dV.copy("EP_I.VLN");
-        dV.minus("V");
-        
-        // compute Z = dV / I (I = Iin / 3 if 3-phase)
-        Z.copy("dV");
-        Z.div("I");
-        
-        // calculate this component impedance
+        // calculate this component resistance/inductance
         R = Z.r;
         L = Z.j / (2*PI*EP_I.frequency);
-        if (EP_I.ElectricPowerType == "AC") {
-        }
-        else if (EP_I.ElectricPowerType == "AC3") {
-          I.scale(1. / 3.);
-        }
       }
+      
     } else { // off-design
       // calculate current from voltage drop
       Z.setrj(R,  L * (2*PI*EP_I.frequency));
